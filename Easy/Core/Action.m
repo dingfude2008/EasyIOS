@@ -109,7 +109,7 @@ DEF_SINGLETON(Action)
     }else if(msg.SCHEME.isNotEmpty && msg.HOST.isNotEmpty){
         url = [NSString stringWithFormat:@"%@://%@%@",msg.SCHEME,msg.HOST,msg.PATH];
     }else{
-        url = [NSString stringWithFormat:@"http://%@%@",[Action sharedInstance].HOST_URL,msg.PATH];
+        url = [NSString stringWithFormat:@"%@://%@%@",(msg.SCHEME.isNotEmpty ? @"https":msg.SCHEME),[Action sharedInstance].HOST_URL,msg.PATH];
     }
     if(msg.appendPathInfo.isNotEmpty){
         url = [url stringByAppendingString:msg.appendPathInfo];
@@ -118,8 +118,22 @@ DEF_SINGLETON(Action)
     }
     
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    AFURLSessionManager *manager = [[AFURLSessionManager alloc] initWithSessionConfiguration:configuration];
-
+    AFHTTPSessionManager *manager = [[AFHTTPSessionManager alloc] initWithSessionConfiguration:configuration];
+    manager.responseSerializer    = [AFJSONResponseSerializer serializer];
+    manager.responseSerializer.acceptableContentTypes = [NSSet setWithObjects: @"text/plain", @"charset=UTF-8", @"application/json", @"text/json", @"text/javascript",@"text/html", nil];
+    if ([msg.SCHEME isEqualToString:@"https"])
+    {
+        manager.requestSerializer = [AFJSONRequestSerializer serializer];
+        manager.securityPolicy = ({
+            AFSecurityPolicy *securityPolicy = [AFSecurityPolicy policyWithPinningMode:AFSSLPinningModeNone];
+            [securityPolicy setAllowInvalidCertificates:YES];
+            securityPolicy.validatesDomainName = NO;
+            securityPolicy;
+        });
+    }else{
+        manager.requestSerializer = [AFHTTPRequestSerializer serializer];
+    }
+    
     NSMutableURLRequest *request = [[AFHTTPRequestSerializer serializer] requestWithMethod:msg.METHOD URLString:url parameters:requestParams error:nil];
     if(msg.httpHeaderFields.isNotEmpty){
         [msg.httpHeaderFields enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *stop) {
